@@ -5,6 +5,7 @@
 #   Description : additional yolov3 and yolov4 functions
 #
 # ================================================================
+import os.path
 from multiprocessing import Process, Queue, Pipe
 import cv2
 import time
@@ -17,6 +18,8 @@ from yolov3.yolov4 import *
 from tensorflow.python.saved_model import tag_constants
 import pytesseract
 import easyocr
+import base64
+from pprint import pprint
 
 def load_yolo_weights(model, weights_file):
     tf.keras.backend.clear_session()  # used to reset layer names
@@ -249,8 +252,7 @@ def image_preprocess(image, target_size, gt_boxes=None):
     '''
 
 
-def draw_bbox(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_confidence=True,
-              Text_colors=(255, 255, 0), rectangle_colors='', tracking=False):
+def draw_bbox(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_confidence=True, Text_colors=(255, 255, 0), rectangle_colors='', tracking=False):
     NUM_CLASS = read_class_names(CLASSES)
     num_classes = len(NUM_CLASS)
     image_h, image_w, _ = image.shape
@@ -272,11 +274,9 @@ def draw_bbox(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_co
         if bbox_thick < 1: bbox_thick = 1
         fontScale = 0.75 * bbox_thick
         (x1, y1), (x2, y2) = (coor[0], coor[1]), (coor[2], coor[3])
-
+        # print(x1,y1,x2,y2)
         # put object rectangle
         cv2.rectangle(image, (x1, y1), (x2, y2), bbox_color, bbox_thick * 2)
-
-
 
         if show_label:
             # get text label
@@ -310,8 +310,165 @@ def draw_bbox(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_co
             cv2.rectangle(image, (x1, y1), (x1 + text_width, y1 - text_height - baseline), bbox_color, thickness=cv2.FILLED)
 
             # put text above rectangle
-            # cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,
-            #              fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+            cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                         fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+#################################################################################################################################################
+            # ocr = image[y1:y2, x1:x2]
+            # cv2.imshow('ocr',ocr)
+            # cv2.imshow('license_plate',ocr)
+            # reader = easyocr.Reader(['en', 'en'])  # need to run only once to load model into memory [english(en) to english(en) convertion]
+            # result = reader.readtext(ocr)
+            # #result = pytesseract.image_to_string(ocr)
+            # #print(result)
+            # #put text above rectangle
+            # cv2.putText(image, str((result[0][1], round(result[0][2], 2))), (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+
+##################################################################################################################################################
+    return image
+######################################################
+
+
+def draw_bbox2(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_confidence=True, Text_colors=(255, 255, 0), rectangle_colors='', tracking=False):
+    NUM_CLASS = read_class_names(CLASSES)
+    num_classes = len(NUM_CLASS)
+    image_h, image_w, _ = image.shape
+    hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
+    # print("hsv_tuples", hsv_tuples)
+    colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+    colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+
+    random.seed(0)
+    random.shuffle(colors)
+    random.seed(None)
+
+    y = 1
+
+    x1, y1 = None, None
+
+    for i, bbox in enumerate(bboxes):
+        coor = np.array(bbox[:4], dtype=np.int32)
+        score = bbox[4]
+        class_ind = int(bbox[5])
+        bbox_color = rectangle_colors if rectangle_colors != '' else colors[class_ind]
+        bbox_thick = int(0.6 * (image_h + image_w) / 1000)
+        if bbox_thick < 1: bbox_thick = 1
+        fontScale = 0.75 * bbox_thick
+        (x1, y1), (x2, y2) = (coor[0], coor[1]), (coor[2], coor[3])
+
+        # print(x1,y1,x2,y2)
+
+        # put object rectangle
+        cv2.rectangle(image, (x1, y1), (x2, y2), bbox_color, bbox_thick * 2)
+
+        # lic_plates = []
+        # lic_plates.append(image[y1:y2, x1:x2])
+        #
+        # file = r'D:\backup\license_plate_detection\TensorFlow-2.x-YOLOv3\IMAGES\Cropped'
+        #
+        #
+        # for x in lic_plates:
+        #     # print(x)
+        #     cv2.imshow(f'CROPPED_{y}', x)
+        #     cv2.imwrite(fr"D:\backup\license_plate_detection\TensorFlow-2.x-YOLOv3\IMAGES\Cropped\cropped_{y}.jpg", x)  # for image detection
+        #     y += 1
+        #
+        # cv2.waitKey(1)
+        croppedlicenseplate = image[y1:y2, x1:x2]
+        # cv2.imwrite("./IMAGES/croppedlicenseplate.jpg",croppedlicenseplate)
+        # cv2.imwrite("./IMAGES/croppedlicenseplate.jpg", image)  # for image detection
+
+        cv2.imwrite("./IMAGES/croppedlicenseplate.jpg",croppedlicenseplate)
+
+        # cv2.imshow("Croppedlicenseplate",croppedlicenseplate)
+        # cv2.waitKey(0)
+
+        # cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        # image = frame[y1:y2, x1:x2]
+
+        import boto3
+        client = boto3.client('textract')
+        imgfilename = r"./IMAGES/croppedlicenseplate.jpg"
+        # print("hello")
+        # def get_file_from_filepath(filename):
+        with open(imgfilename, 'rb') as imgfile:
+            imageBytes = bytearray(imgfile.read())
+            # print(type(imageBytes))
+
+        # imgbyte = get_file_from_filepath(imgfilename)
+
+        result = client.detect_document_text(Document={'Bytes': imageBytes})
+        shri = result['Blocks']
+
+        text_arr = []
+
+        for item in shri:
+            if item["BlockType"] == "LINE":
+                text_arr.append(item['Text'])
+            # else:
+            #     print("Text is not clear")
+
+        # print(text_arr)
+        # cv2.putText(image, str(text_arr), (50, 200), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=1.0, color=(0, 255, 0),
+        #             thickness=1)
+
+        if show_label:
+            # get text label
+            score_str = " {:.2f}".format(score) if show_confidence else ""
+
+            if tracking: score_str = " " + str(score)
+
+            try:
+                # label = "{}".format(NUM_CLASS[class_ind]) + score_str
+                for i in text_arr:
+                    label = i
+                    (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                                                                          fontScale,
+                                                                          thickness=bbox_thick)
+                    # print(text_height, text_width, baseline, 'HIIII')
+                    # put filled text rectangle
+                    cv2.rectangle(image, (x1, y1), (x1 + text_width, y1 - text_height - baseline), bbox_color,
+                                  thickness=cv2.FILLED)
+
+                    # put text above rectangle
+                    cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors,
+                                bbox_thick, lineType=cv2.LINE_AA)
+                # print("asjdgauy")
+                # print(label)
+                #
+                # # get text size
+                # (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale,
+                #                                                       thickness=bbox_thick)
+                # # put filled text rectangle
+                # cv2.rectangle(image, (x1, y1), (x1 + text_width, y1 - text_height - baseline), bbox_color,
+                #               thickness=cv2.FILLED)
+                #
+                # # put text above rectangle
+                # cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                #             fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+
+                # get text size
+
+
+                # cv2.putText(image, text_arr[0], (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+
+
+            except KeyError:
+                print("You received KeyError, this might be that you are trying to use yolo original weights")
+                print("while using custom classes, if using custom model in configs.py set YOLO_CUSTOM_WEIGHTS = True")
+
+            # # get text size
+            #
+            # (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, thickness=bbox_thick)
+            # print(text_height, text_width, baseline, 'HIIII')
+            # # put filled text rectangle
+            # cv2.rectangle(image, (x1, y1), (x1 + text_width, y1 - text_height - baseline), bbox_color, thickness=cv2.FILLED)
+            #
+            # # put text above rectangle
+            # cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+            # # cv2.putText(image, text_arr[0], (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+
+
+
 
 
 #################################################################################################################################################
@@ -327,7 +484,85 @@ def draw_bbox(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_co
 
 ##################################################################################################################################################
 
+    return image, x1, y1
+    # return croppedlicenseplate
+
+#####################################
+
+
+def draw_bbox_3(image, bboxes, CLASSES=YOLO_COCO_CLASSES, show_label=True, show_confidence=True, Text_colors=(255, 255, 0), rectangle_colors='', tracking=False):
+    NUM_CLASS = read_class_names(CLASSES)
+    num_classes = len(NUM_CLASS)
+    image_h, image_w, _ = image.shape
+    hsv_tuples = [(1.0 * x / num_classes, 1., 1.) for x in range(num_classes)]
+    # print("hsv_tuples", hsv_tuples)
+    colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+    colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+
+    random.seed(0)
+    random.shuffle(colors)
+    random.seed(None)
+
+    for i, bbox in enumerate(bboxes):
+        coor = np.array(bbox[:4], dtype=np.int32)
+        score = bbox[4]
+        class_ind = int(bbox[5])
+        bbox_color = rectangle_colors if rectangle_colors != '' else colors[class_ind]
+        bbox_thick = int(0.6 * (image_h + image_w) / 1000)
+        if bbox_thick < 1: bbox_thick = 1
+        fontScale = 0.75 * bbox_thick
+        (x1, y1), (x2, y2) = (coor[0], coor[1]), (coor[2], coor[3])
+        # print(x1,y1,x2,y2)
+        # put object rectangle
+        cv2.rectangle(image, (x1, y1), (x2, y2), bbox_color, bbox_thick * 2)
+
+        if show_label:
+            # get text label
+            score_str = " {:.2f}".format(score) if show_confidence else ""
+
+            if tracking: score_str = " " + str(score)
+
+            try:
+                label = "{}".format(NUM_CLASS[class_ind]) + score_str
+                # print("asjdgauy")
+                # print(label)
+                #
+                # # get text size
+                # (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale,
+                #                                                       thickness=bbox_thick)
+                # # put filled text rectangle
+                # cv2.rectangle(image, (x1, y1), (x1 + text_width, y1 - text_height - baseline), bbox_color,
+                #               thickness=cv2.FILLED)
+                #
+                # # put text above rectangle
+                # cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                #             fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+
+            except KeyError:
+                print("You received KeyError, this might be that you are trying to use yolo original weights")
+                print("while using custom classes, if using custom model in configs.py set YOLO_CUSTOM_WEIGHTS = True")
+
+            # get text size
+            (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, thickness=bbox_thick)
+            # put filled text rectangle
+            cv2.rectangle(image, (x1, y1), (x1 + text_width, y1 - text_height - baseline), bbox_color, thickness=cv2.FILLED)
+
+            # put text above rectangle
+            cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+#################################################################################################################################################
+            # ocr = image[y1:y2, x1:x2]
+            # cv2.imshow('ocr',ocr)
+            # cv2.imshow('license_plate',ocr)
+            # reader = easyocr.Reader(['en', 'en'])  # need to run only once to load model into memory [english(en) to english(en) convertion]
+            # result = reader.readtext(ocr)
+            # #result = pytesseract.image_to_string(ocr)
+            # #print(result)
+            # #put text above rectangle
+            # cv2.putText(image, str((result[0][1], round(result[0][2], 2))), (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+
+##################################################################################################################################################
     return image
+
 
 
 def bboxes_iou(boxes1, boxes2):
@@ -457,7 +692,49 @@ def detect_image(Yolo, image_path, output_path, input_size=416, show=False, CLAS
 
     # print(bboxes)
 
-    img = draw_bbox(original_image, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
+    draw_bbox2(original_image, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
+
+
+
+    # cv2.imshow("img",img)
+    # cv2.waitKey(0)
+    ######################################
+
+    import boto3
+    # import numpy as np
+    # import requests
+    # from pprint import pprint
+
+    # client = boto3.client('rekognition')
+    client = boto3.client('textract')
+
+    imgfilename = r"./IMAGES/croppedlicenseplate.jpg"
+
+    # def get_file_from_filepath(filename):
+    with open(imgfilename, 'rb') as imgfile:
+        imageBytes = bytearray(imgfile.read())
+        # print(type(imageBytes))
+
+    # imgbyte = get_file_from_filepath(imgfilename)
+
+    result = client.detect_document_text(Document={'Bytes': imageBytes})
+    shri = result['Blocks']
+
+    text_arr = []
+
+    for item in shri:
+        if item["BlockType"] == "LINE":
+            text_arr.append(item['Text'])
+        # else:
+        #     print("Text is not clear")
+
+    print(text_arr)
+
+    ######################################
+
+
+
+
     # cv2.imshow('img',)
     # draw_bbox(original_image, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
     # CreateXMLfile("XML_Detections", str(int(time.time())), original_image, bboxes, read_class_names(CLASSES))
@@ -466,7 +743,7 @@ def detect_image(Yolo, image_path, output_path, input_size=416, show=False, CLAS
 
     ###############################################################################
     # image_path = image
-    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
+    # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
 
     # image = cv2.imread(image)
     # image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -474,11 +751,11 @@ def detect_image(Yolo, image_path, output_path, input_size=416, show=False, CLAS
     # reader = pytesseract.image_to_string(image, lang='eng')
     # print(reader)
 
-    reader = easyocr.Reader(['en', 'en'])
-    result = reader.readtext(img)
+    # reader = easyocr.Reader(['en', 'en'])
+    # result = reader.readtext(img)
     # result = reader.readtext(original_image)
     # result = reader.readtext(bboxes)
-    print(result)
+    # pprint(result)
 
     # Save image
     # if output_path != '': cv2.imwrite(output_path, image)
@@ -649,128 +926,220 @@ def detect_video_realtime_mp(video_path, output_path, input_size=416, show=False
     cv2.destroyAllWindows()
 
 
-def detect_video(Yolo, video_path, output_path, input_size=416, show=False, CLASSES=YOLO_COCO_CLASSES,
-                 score_threshold=0.3, iou_threshold=0.45, rectangle_colors=''):
+def detect_video(Yolo, video_path, output_path, input_size=416, show=False, CLASSES=YOLO_COCO_CLASSES,  score_threshold=0.3, iou_threshold=0.45, rectangle_colors=''):
     times, times_2 = [], []
     vid = cv2.VideoCapture(video_path)
 
     # by default VideoCapture returns float instead of int
     # width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))              # 2562
-    # # height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))            # 1440
-    # fps = int(vid.get(cv2.CAP_PROP_FPS))
-    # # codec = cv2.VideoWriter_fourcc(*'XVID')
+    width = 1280
+    # height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))            # 1440
+    height = 720
+    fps = int(vid.get(cv2.CAP_PROP_FPS))
     # codec = cv2.VideoWriter_fourcc(*'XVID')
-    # out = cv2.VideoWriter(output_path, codec, fps, (width, height))  # output_path must be .mp4
+    codec = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, codec, 25, (width, height))  # output_path must be .mp4
 
     while True:
-        _, img = vid.read()
-        img = cv2.resize(img, (1280, 720))
+        ret, frame = vid.read()
+
+        img = cv2.resize(frame, (1280, 720))
         img_h, img_w, img_c = img.shape                     # height, width, channel
 
-        halfHeight = int(img_h / 2)
-        onethirdHeight = int(2 * img_h / 3)
-        new_img = img[onethirdHeight:img_h, 0:img_w]
+        # print(img_h,img_w)
 
-        # cv2.imshow('new', new_img)
+            # halfHeight = int(img_h / 2)
+            # onethirdHeight = int(2 * img_h/ 3)
+            # new_img = img[onethirdHeight:img_h, 0:img_w]
 
-
-        # print(img_w, img_h)
-        # print(img.shape)
-
-        try:
-            original_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
-            original_image = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
-        except:
-            break
-            #continue
-
-        image_data = image_preprocess(np.copy(original_image), [input_size, input_size])
-        image_data = image_data[np.newaxis, ...].astype(np.float32)
-
-        t1 = time.time()
-        if YOLO_FRAMEWORK == "tf":
-            pred_bbox = Yolo.predict(image_data)
-        elif YOLO_FRAMEWORK == "trt":
-            batched_input = tf.constant(image_data)
-            result = Yolo(batched_input)
-            pred_bbox = []
-            for key, value in result.items():
-                value = value.numpy()
-                pred_bbox.append(value)
-
-        t2 = time.time()
-
-        pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
-        pred_bbox = tf.concat(pred_bbox, axis=0)
-
-        bboxes = postprocess_boxes(pred_bbox, original_image, input_size, score_threshold)
-        #bboxes = postprocess_boxes(pred_bbox, new_img, input_size, score_threshold)
-        bboxes = nms(bboxes, iou_threshold, method='nms')
-
-        image = draw_bbox(original_image, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
-        #image = draw_bbox(new_img, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
-
-        t3 = time.time()
-        times.append(t2 - t1)
-        times_2.append(t3 - t1)
-
-        times = times[-20:]
-        times_2 = times_2[-20:]
-
-        ms = sum(times) / len(times) * 1000
-        fps = 1000 / ms
-        fps2 = 1000 / (sum(times_2) / len(times_2) * 1000)
-
-        ##############################################################################################
-        # ocr = image[width : width + width, height: height + height]
-        # cv2.imshow('ocr', ocr)
-        # # cv2.imshow('license_plate',ocr)
-        # reader = easyocr.Reader(
-        #     ['en', 'en'])  # need to run only once to load model into memory [english(en) to english(en) convertion]
-        # result = reader.readtext(ocr)
-        #
-        # # put text above rectangle
-        # cv2.putText(image, str((result[0][1], round(result[0][2], 2))), (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,
-        #             fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
-        ##############################################################################################
-
-        image = cv2.putText(image, "Time: {:.1f}FPS".format(fps), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1,
-                             (0, 0, 255), 2)
-        # CreateXMLfile("XML_Detections", str(int(time.time())), original_image, bboxes, read_class_names(CLASSES))
-        #
-        fps = int(vid.get(cv2.CAP_PROP_FPS))
-        # codec = cv2.VideoWriter_fourcc(*'XVID')
-        codec = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter(output_path, codec, fps, (img_w, img_h))  # output_path must be .mp4
-
-        print("Time: {:.2f}ms, Detection FPS: {:.1f}, total FPS: {:.1f}".format(ms, fps, fps2))
-        if output_path != '': out.write(image)
-        # if show:
-
-        # print(img.shape)
-        img[onethirdHeight:img_h, 0:img_w] = image[0:img_h, 0:img_w]
-
-########################################################################################################################
-        #image_path = image
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
-
-        #image = cv2.imread(image)
-        #image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        reader = easyocr.Reader(['en', 'en'])
-        result = reader.readtext(image)
-        print(result[-1][-2])
-
-        #image = cv2.putText(image, str(result), "Time: {:.1f}FPS".format(fps), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
-########################################################################################################################
+            # cv2.imshow('new', new_img)
 
 
+            # print(img_w, img_h)
+            # print(img.shape)
 
-        # cv2.imshow('output', image)
-        cv2.imshow('output', img)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            cv2.destroyAllWindows()
-            break
+        if ret:
+            try:
+                original_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                original_image = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
+            except:
+                break
+
+            image_data = image_preprocess(np.copy(original_image), [input_size, input_size])
+            image_data = image_data[np.newaxis, ...].astype(np.float32)
+
+            t1 = time.time()
+            if YOLO_FRAMEWORK == "tf":
+                pred_bbox = Yolo.predict(image_data)
+
+            elif YOLO_FRAMEWORK == "trt":
+                batched_input = tf.constant(image_data)
+                result = Yolo(batched_input)
+                pred_bbox = []
+                for key, value in result.items():
+                    value = value.numpy()
+                    pred_bbox.append(value)
+            # print("before", pred_bbox)
+            t2 = time.time()
+
+            pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
+            # print("after",pred_bbox)
+            pred_bbox = tf.concat(pred_bbox, axis=0)
+
+            bboxes = postprocess_boxes(pred_bbox, original_image, input_size, score_threshold)
+
+            #bboxes = postprocess_boxes(pred_bbox, new_img, input_size, score_threshold)
+            bboxes = nms(bboxes, iou_threshold, method='nms')
+            image, x_pos, y_pos = draw_bbox2(original_image, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
+            # image = draw_bbox(new_img, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
+            # image = draw_bbox(original_image, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
+            # print(type(image))
+
+            t3 = time.time()
+            times.append(t2 - t1)
+            times_2.append(t3 - t1)
+
+            times = times[-20:]
+            times_2 = times_2[-20:]
+
+            ms = sum(times) / len(times) * 1000
+            fps = 1000 / ms
+            fps2 = 1000 / (sum(times_2) / len(times_2) * 1000)
+
+            ##############################################################################################
+            # ocr = image[width : width + width, height: height + height]
+            # cv2.imshow('ocr', ocr)
+            # # cv2.imshow('license_plate',ocr)
+            # reader = easyocr.Reader(
+            #     ['en', 'en'])  # need to run only once to load model into memory [english(en) to english(en) convertion]
+            # result = reader.readtext(ocr)
+            #
+            # # put text above rectangle
+            # cv2.putText(image, str((result[0][1], round(result[0][2], 2))), (x1, y1 - 4), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+            #             fontScale, Text_colors, bbox_thick, lineType=cv2.LINE_AA)
+            ##############################################################################################
+
+            image = cv2.putText(image, "Time: {:.1f}FPS".format(fps), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+            # cv2.putText(image, "Time: {:.1f}FPS".format(fps), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+
+
+            # CreateXMLfile("XML_Detections", str(int(time.time())), original_image, bboxes, read_class_names(CLASSES))
+            #
+            # fps = int(vid.get(cv2.CAP_PROP_FPS))
+            # # codec = cv2.VideoWriter_fourcc(*'XVID')
+            # codec = cv2.VideoWriter_fourcc(*'XVID')
+            # # print(img_w,img_h)
+            # out = cv2.VideoWriter(output_path, codec, fps, (img_w, img_h))  # output_path must be .mp4
+
+            print("Time: {:.2f}ms, Detection FPS: {:.1f}, total FPS: {:.1f}".format(ms, fps, fps2))
+            #
+            # import boto3
+            # client = boto3.client('textract')
+            # imgfilename = r"./IMAGES/croppedlicenseplate.jpg"
+            # # print("hello")
+            # # def get_file_from_filepath(filename):
+            # with open(imgfilename, 'rb') as imgfile:
+            #     imageBytes = bytearray(imgfile.read())
+            #     # print(type(imageBytes))
+            #
+            # # imgbyte = get_file_from_filepath(imgfilename)
+            #
+            # result = client.detect_document_text(Document={'Bytes': imageBytes})
+            # shri = result['Blocks']
+            #
+            # text_arr = []
+            #
+            # for item in shri:
+            #     if item["BlockType"] == "LINE":
+            #         text_arr.append(item['Text'])
+            #     # else:
+            #     #     print("Text is not clear")
+            #
+            # print(text_arr)
+            # cv2.putText(image, str(text_arr), (50, 200), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=1.0, color=(0, 255, 0), thickness=1)
+
+            # import boto3
+            # client = boto3.client('textract')
+            # imgfilename = r"./IMAGES/croppedlicenseplate.jpg"
+            # for images in os.listdir('D://backup//license_plate_detection//TensorFlow-2.x-YOLOv3//IMAGES//Cropped'):
+            #     imgfilename = images
+            #     # print("hello")
+            #     # def get_file_from_filepath(filename):
+            #
+            #     # with open(imgfilename, 'rb') as imgfile:
+            #     #     imageBytes = bytearray(imgfile.read())
+            #
+            #         # print(type(imageBytes))
+
+            # imgbyte = get_file_from_filepath(imgfilename)
+
+            # result = client.detect_document_text(Document={'Bytes': imageBytes})
+            # shri = result['Blocks']
+
+            text_arr = []
+
+            # for item in shri:
+            #     if item["BlockType"] == "LINE":
+            #         text_arr.append(item['Text'])
+                # else:
+                #     print("Text is not clear")
+
+            # print(text_arr)
+            # print(type(x_pos), type(y_pos))
+            # cv2.putText(image, str(text_arr), (50, 200),cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale= 1.0, color=(0, 255, 0), thickness=1 )
+            # cv2.putText(image, str('HI'), (int(x_pos) + 10, int(y_pos) + 10), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale= 1.0, color=(0, 255, 0), thickness=1 )
+            # cv2.putText(image, str('HI'), (x_pos, y_pos), cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale= 1.0, color=(0, 255, 0), thickness=1 )
+
+            if output_path != '': out.write(image)
+            # if show:
+            # out.write(image)
+            # print(img.shape)
+
+            # img[onethirdHeight:img_h, 0:img_w] = image[0:img_h, 0:img_w]
+            # import boto3
+            # client = boto3.client('textract')
+            # imgfilename = r"./IMAGES/croppedlicenseplate.jpg"
+            # # print("hello")
+            # # def get_file_from_filepath(filename):
+            # with open(imgfilename, 'rb') as imgfile:
+            #     imageBytes = bytearray(imgfile.read())
+            #     # print(type(imageBytes))
+            #
+            # # imgbyte = get_file_from_filepath(imgfilename)
+            #
+            # result = client.detect_document_text(Document={'Bytes': imageBytes})
+            # shri = result['Blocks']
+            #
+            # text_arr = []
+            #
+            # for item in shri:
+            #     if item["BlockType"] == "LINE":
+            #         text_arr.append(item['Text'])
+            #     # else:
+            #     #     print("Text is not clear")
+            #
+            # print(text_arr)
+            # cv2.putText(image, str(text_arr), (50, 200),cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale= 1.0, color=(0, 255, 0), thickness=1 )
+
+            ########################################################################################################################
+            #image_path = image
+            # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe'
+            #
+            # #image = cv2.imread(image)
+            # #image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            #
+            # reader = easyocr.Reader(['en', 'en'])
+            # result = reader.readtext(image)
+            # print(result[-1][-2])
+
+            #image = cv2.putText(image, str(result), "Time: {:.1f}FPS".format(fps), (0, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+            ########################################################################################################################
+
+            cv2.imshow('output', image)
+            # cv2.imshow('output', img)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                cv2.destroyAllWindows()
+                break
 
     cv2.destroyAllWindows()
 
@@ -828,8 +1197,7 @@ def detect_realtime(Yolo, output_path, input_size=416, show=False, CLASSES=YOLO_
 
         frame = draw_bbox(original_frame, bboxes, CLASSES=CLASSES, rectangle_colors=rectangle_colors)
         # CreateXMLfile("XML_Detections", str(int(time.time())), original_frame, bboxes, read_class_names(CLASSES))
-        image = cv2.putText(frame, "Time: {:.1f}FPS".format(fps), (0, 30),
-                            cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+        image = cv2.putText(frame, "Time: {:.1f}FPS".format(fps), (0, 30),cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
 
         if output_path != '': out.write(frame)
         if show:
